@@ -1,0 +1,32 @@
+### Laravel (app lives in core/)
+/core/vendor/
+core/node_modules/
+core/npm-debug.log
+core/yarn-error.log
+
+core/storage/*.key
+core/storage/logs/*
+core/storage/framework/sessions/*
+core/storage/framework/views/*
+core/storage/framework/cache/*
+core/storage/app/public/*
+core/public/build
+core/public/hot
+core/public/storage
+core/.env
+core/.env.testing
+core/.phpunit.result.cache
+
+### Docker
+.env
+.docker-data
+docker-data
+
+### Editors
+.idea
+.vscode/*
+!.vscode/settings.json
+*.code-workspace
+.history/
+.DS_Store
+Thumbs.db
