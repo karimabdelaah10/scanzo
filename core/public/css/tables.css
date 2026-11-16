@@ -1,0 +1,114 @@
+/* =========================================================
+   Scanzo responsive tables — the one stacking pattern.
+
+   A plain static file, linked after tokens.css by the dashboard and the
+   platform panel, because the panel is buildless and cannot import from the
+   Vite bundle. Bump `scanzo.assets_version` when you edit it.
+
+   The markup contract (tests/Feature/StackedTablesTest.php enforces it):
+
+     <table class="tbl stacks">                (the panel's tables: just "stacks")
+       <thead>…</thead>
+       <tbody>
+         <tr>
+           <td class="id">Name</td>              the card's heading, no label
+           <td data-label="Price" class="num">   a label-and-value pair
+           <td class="actions">…buttons…</td>    bottom of the card, 44px targets
+         </tr>
+         <tr class="note"><td class="span" colspan="N">…</td></tr>
+                                                  a message about the row above
+       </tbody>
+     </table>
+
+   Every <td> is one of: [data-label], .id, .actions, .span. A column added
+   without one of those fails the test, rather than shipping as an orphaned
+   number on a phone.
+
+   `table.stacks.kv` is the key/value variant (a <th> and a <td> per row):
+   the <th> becomes the label above its value.
+
+   Above 640px nothing here applies and the table is a normal table.
+
+   Numbers: `unicode-bidi: plaintext` and NOT `direction: ltr`. On a cell,
+   `direction: ltr` would also flip which side the label floats to and where
+   `text-align: end` points, in a page that is RTL. `plaintext` resolves each
+   value on its own first strong character: "INV-0042" and "ABC-123" run LTR,
+   "1,250 ج.م" keeps its digits in order inside the RTL card, and a bare
+   number falls back to the page's direction.
+   ========================================================= */
+
+@media (min-width: 641px) {
+  table.stacks td.actions { text-align: end; }
+  table.stacks td.actions .row { justify-content: flex-end; }
+}
+
+@media (max-width: 640px) {
+  table.stacks thead { display: none; }
+  table.stacks, table.stacks tbody { display: block; width: 100%; }
+
+  /* A row is a card. The ground colour on a card's surface keeps it apart from
+     the wrapper some screens put round the table, without a second border. */
+  table.stacks tr {
+    display: block; margin: 0 0 10px; padding: 12px 14px;
+    background: var(--c-ground); border-radius: var(--radius);
+    box-shadow: var(--ring);
+  }
+  table.stacks tr:last-child { margin-bottom: 0; }
+
+  table.stacks td, table.stacks th {
+    display: flow-root;            /* contains the floated label */
+    padding: 5px 0; border: 0; white-space: normal;
+    text-align: end; overflow-wrap: anywhere;
+  }
+  table.stacks td:empty { display: none; }
+
+  /* The label sits on the start side (the right, in RTL); the value runs to the
+     other end. A float rather than flex, so the value stays ordinary text in
+     the cell's own line boxes and `unicode-bidi` below applies to it. */
+  table.stacks td[data-label]::before {
+    content: attr(data-label);
+    float: right; float: inline-start;
+    max-width: 45%; margin-inline-end: 12px;
+    color: var(--c-muted); font-size: var(--fs-xs); font-weight: 400; text-align: start;
+  }
+
+  table.stacks td.num, table.stacks td.mono, table.stacks .mono { unicode-bidi: plaintext; font-variant-numeric: tabular-nums; }
+
+  /* The identifying cell is the heading. */
+  table.stacks td.id {
+    text-align: start; padding: 0 0 8px; margin-bottom: 4px;
+    font-size: var(--fs-md); font-weight: 700; line-height: 1.4;
+    border-bottom: 1px solid var(--c-line);
+  }
+  table.stacks td.id::before { content: none; }
+
+  /* Actions close the card: a row of real 44px targets. */
+  table.stacks td.actions {
+    display: flex; flex-wrap: wrap; gap: 8px; text-align: start;
+    margin-top: 6px; padding: 10px 0 0; border-top: 1px solid var(--c-line);
+  }
+  table.stacks td.actions .row { justify-content: flex-start; }
+  table.stacks td.actions .btn, table.stacks td.actions button, table.stacks td.actions a {
+    min-height: 44px; min-width: 44px; padding-inline: 16px;
+  }
+  table.stacks td.actions > *, table.stacks td.actions .row > * { flex: 1 1 auto; }
+
+  /* A message about the row above it hangs off that card. */
+  table.stacks tr.note { margin-top: -6px; padding: 0 4px; background: none; box-shadow: none; }
+  table.stacks td.span { text-align: start; }
+
+  /* Fields that live in a cell get room to be typed in. */
+  table.stacks td .input.cell { width: min(160px, 55%); min-height: 44px; }
+
+  /* key / value */
+  table.stacks.kv th {
+    display: block; padding: 0 0 2px; font-size: var(--fs-xs); font-weight: 400;
+    color: var(--c-muted); text-align: start;
+  }
+  table.stacks.kv td { text-align: start; padding: 0 0 10px; }
+  table.stacks.kv tr { padding-bottom: 2px; }
+
+  /* The panel wraps its tables in .scroll, which draws its own ring; stacked,
+     there is nothing to scroll and the cards carry their own. */
+  .scroll:has(> table.stacks), .tbl-wrap:has(> table.stacks) { overflow: visible; box-shadow: none; background: none; }
+}

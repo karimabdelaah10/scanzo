@@ -1,0 +1,247 @@
+/* =========================================================
+   Scanzo design tokens — the one place colour, type, space,
+   shape and motion are defined.
+
+   Linked, as a plain file, from all three front ends:
+     /till        resources/views/till.blade.php        (Vue, Vite)
+     /dashboard   resources/views/dashboard.blade.php   (Vue, Vite)
+     /admin       resources/views/admin/layout.blade.php (Blade, buildless)
+   so it cannot live inside a Vite-built file. It is not hashed:
+   bump `scanzo.assets_version` in config/scanzo.php when you edit it.
+
+   There are no component rules here, only custom properties.
+
+   How colour flows
+     1. Palette   html[data-palette="…"] swaps the --c-* block. Only the
+                  platform panel offers a picker; shops never see one.
+     2. Brand     a shop's colours are written at runtime onto <html> as
+                  --c-accent (the picked colour, decorative), --c-accent-fill
+                  (the contrast-adjusted one, for backgrounds),
+                  --c-on-accent / --c-accent-text and
+                  --side-bg / --side-fg (see public/js/brand-boot.js). The
+                  foregrounds are derived by App\Support\Brand\Contrast,
+                  never chosen.
+     3. Legacy    --accent, --bg, --fg … are aliases of the above, so the
+                  100 Vue files did not have to be renamed.
+
+   STATE COLOURS (--c-danger, --c-warn, --c-success and their soft
+   backgrounds) are declared once, on :root, below. No palette block and
+   no brand may redeclare them: if a shop's brand is red, an error must
+   still be told apart from a button. tests/Feature/DesignTokensTest.php
+   fails the build if one does.
+
+   Breakpoints (media queries cannot read variables, so they are repeated
+   as literals): 760 grid collapse · 980 admin sidebar fixed · 1080 switcher
+   popover vs sheet. The dashboard shell uses 900 and the till counter 1024;
+   those are older and are left alone.
+   ========================================================= */
+
+:root {
+  /* ---------- Fonts ---------- */
+  /* The till loads Plex only; Reem Kufi is loaded by the dashboard and the
+     platform panel, and the stack falls back to Plex where it is not. */
+  --f-body: 'IBM Plex Sans Arabic', system-ui, 'Segoe UI', Tahoma, sans-serif;
+  --f-display: 'Reem Kufi', 'IBM Plex Sans Arabic', system-ui, 'Segoe UI', Tahoma, sans-serif;
+  --f-mono: ui-monospace, Menlo, Consolas, monospace;
+
+  /* ---------- Type scale ---------- */
+  --fs-xs: 0.8125rem;                   /* 13 */
+  --fs-sm: 0.9375rem;                   /* 15, the till's base size */
+  --fs-md: 1.0625rem;                   /* 17 */
+  --fs-lg: 1.25rem;                     /* 20 */
+  --fs-xl: clamp(1.375rem, 1.1rem + 1vw, 1.75rem);
+  --fs-2xl: clamp(1.75rem, 1.3rem + 1.8vw, 2.5rem);
+
+  /* ---------- Space ---------- */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+  --gutter: clamp(14px, 2.4vw, 32px);   /* page padding */
+  --section-gap: clamp(16px, 2vw, 28px);
+
+  /* ---------- Shape ---------- */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-md: var(--radius);           /* the reference's name for it */
+  --radius-lg: 18px;
+  --radius-sheet: 26px;
+  --radius-pill: 999px;
+
+  /* ---------- Motion ---------- */
+  /* The till never goes above --dur-base. --dur-slow is for the dashboard
+     and the platform panel, which are used at a desk. Every transition and
+     animation is switched off under prefers-reduced-motion in the CSS that
+     uses it. */
+  --ease-out: cubic-bezier(.2, .7, .2, 1);
+  --ease-soft: cubic-bezier(.65, .05, .35, 1);
+  --ease-sheet: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 350ms;
+  --dur-lift: .45s;                     /* an interactive card rising; desk surfaces only */
+
+  /* ---------- Surfaces: a ring, not a border ----------
+     A border changes layout; an inset ring does not, so hover and selected
+     states never nudge the page. A resting card has no shadow. */
+  --ring: inset 0 0 0 1px var(--c-line);
+  /* A ring is a non-text element: it takes the contrast-adjusted colour (3:1
+     is its bar), never the raw pick, which a pale brand makes invisible. */
+  --ring-hover: inset 0 0 0 1px var(--c-accent-text);
+  --ring-selected: inset 0 0 0 2px var(--c-accent-text);
+  --shadow-raised: 0 30px 70px -20px rgba(0, 0, 0, .5);
+  --shadow-lift: 0 30px 60px -28px rgba(0, 0, 0, .45);
+
+  /* ---------- Default palette: كحلي وبرتقالي ----------
+     Two oranges, on purpose. #E05614 is 3.81:1 on white and 3.84:1 on the navy
+     ink: it fails 4.5:1 at both polarities, so no text can sit on it.
+
+       --c-accent       the true orange. DECORATIVE only: large headings, icons,
+                        rules, borders, the logo frame, the switcher dots. Never
+                        the background of anything that carries text.
+       --c-accent-fill  what App\Support\Brand\Contrast::surface() makes of it.
+                        The rule moves the colour towards white (ink reads it
+                        a hair better than white does) until ink clears 4.5:1.
+                        Every button and nav fill uses this, with --c-on-accent.
+       --c-accent-text  the orange as text on the light ground, darkened to 4.5:1.
+
+     DesignTokensTest holds all three, and that the fill still equals what
+     Contrast produces. */
+  --c-deep: #0F2A44;            /* sidebar, top bar, sheets' handles */
+  --c-deep-2: #163756;          /* raised surfaces on deep */
+  --c-accent: #E05614;          /* decorative: see above */
+  --c-accent-fill: #E46F37;     /* text-bearing background */
+  --c-on-accent: #0F2A44;       /* ink on the fill: white would not clear 4.5 */
+  --c-accent-text: #B8400A;     /* accent as text or focus ring on a light ground */
+  --c-accent-on-deep: #FF9A62;  /* small accent text on deep */
+  --c-ground: #F8F4EA;          /* page background */
+  --c-surface: #FFFDF8;         /* cards, sheets, inputs */
+  --c-ink: #0F2A44;             /* body text */
+  --c-muted: #5B6275;
+  --c-on-deep: #EDE8DA;
+  --c-on-deep-muted: #C2C6CF;
+  --c-line: rgba(15, 42, 68, .12);
+  --c-line-on-deep: rgba(237, 232, 218, .16);
+
+  /* ---------- State colours: the same in every palette and every brand ---------- */
+  --c-danger: #B42318;
+  --c-danger-bg: #FDECEA;
+  --c-warn: #8A4B08;
+  --c-warn-bg: #FDF1DD;
+  --c-success: #1D5B33;
+  --c-success-bg: #DDEFE3;
+
+  /* ---------- Sidebar and top bar ----------
+     A shop's secondary colour lands here (and only here). */
+  --side-bg: var(--c-deep);
+  --side-fg: var(--c-on-deep);
+  --side-fg-muted: color-mix(in srgb, var(--side-fg) 72%, var(--side-bg));
+  --side-line: color-mix(in srgb, var(--side-fg) 16%, transparent);
+  --side-hover: color-mix(in srgb, var(--side-fg) 10%, transparent);
+
+  /* ---------- The camera view: dark whatever the palette ---------- */
+  --cam: #0b1220;
+  --cam-line: #5eead4;
+
+  /* ---------- Legacy names, defined in terms of the tokens above ----------
+     The till and the dashboard were written against these. */
+  --bg: var(--c-ground);
+  --surface: var(--c-surface);
+  --fg: var(--c-ink);
+  --muted: var(--c-muted);
+  --line: var(--c-line);
+
+  /* --accent has always meant "the background of a button", so it is the fill.
+     Decorative uses say --c-accent. */
+  --accent: var(--c-accent-fill);
+  --accent-fg: var(--c-on-accent);
+  --accent-text: var(--c-accent-text);
+  /* The picked colour (--brand-primary, set only when a shop has one) is used
+     for tints, which are decoration; the adjusted --c-accent is for fills. */
+  --accent-soft: color-mix(in srgb, var(--brand-primary, var(--c-accent)) 14%, var(--c-surface));
+  --accent-soft-fg: color-mix(in srgb, var(--c-accent-text) 40%, var(--c-ink));
+
+  --bad: var(--c-danger);
+  --bad-soft: var(--c-danger-bg);
+  --warn: var(--c-warn);
+  --warn-soft: var(--c-warn-bg);
+  --ok: var(--c-success);
+  --ok-soft: var(--c-success-bg);
+
+  --font: var(--f-body);
+  --mono: var(--f-mono);
+}
+
+/* ---------- كحلي وذهبي (the previous default) ---------- */
+html[data-palette="gold"] {
+  --c-deep: #0F2A44;
+  --c-deep-2: #163756;
+  --c-accent: #C9A24A;
+  --c-accent-fill: #C9A24A;
+  --c-accent-text: #8E6A20;     /* the reference has #9A7425: 4.22:1 on the card colour */
+  --c-accent-on-deep: #E3C77E;
+  --c-on-accent: #0F2A44;       /* NOT white: gold is too light to carry it */
+  --c-ground: #F8F4EA;
+  --c-surface: #FFFDF8;
+  --c-ink: #0F2A44;
+  --c-muted: #5B6275;
+  --c-on-deep: #EDE8DA;
+  --c-on-deep-muted: #C2C6CF;
+  --c-line: rgba(15, 42, 68, .12);
+  --c-line-on-deep: rgba(237, 232, 218, .16);
+}
+
+/* ---------- تركواز ومرجاني ---------- */
+html[data-palette="teal"] {
+  --c-deep: #0B4F5C;
+  --c-deep-2: #11606E;
+  --c-accent: #EE8466;
+  --c-accent-fill: #EE8466;
+  --c-accent-text: #B2452B;
+  --c-accent-on-deep: #FFB9A3;
+  --c-on-accent: #0A2F36;
+  --c-ground: #F2F6F5;
+  --c-surface: #FBFDFC;
+  --c-ink: #0A2F36;
+  --c-muted: #4F6468;
+  --c-on-deep: #E8F2F1;
+  --c-on-deep-muted: #B9D3D3;
+  --c-line: rgba(11, 79, 92, .14);
+  --c-line-on-deep: rgba(232, 242, 241, .18);
+}
+
+/* ---------- بنفسجي وكهرماني ---------- */
+html[data-palette="plum"] {
+  --c-deep: #46204F;
+  --c-deep-2: #562A60;
+  --c-accent: #E7B04C;
+  --c-accent-fill: #E7B04C;
+  --c-accent-text: #8A5A0C;
+  --c-accent-on-deep: #F3CF86;
+  --c-on-accent: #2E1334;
+  --c-ground: #F7F2F6;
+  --c-surface: #FFFCFE;
+  --c-ink: #2E1334;
+  --c-muted: #6A5A6E;
+  --c-on-deep: #F3E9F3;
+  --c-on-deep-muted: #D4C0D6;
+  --c-line: rgba(70, 32, 79, .13);
+  --c-line-on-deep: rgba(243, 233, 243, .18);
+}
+
+/* ---------- فحمي ونحاسي ---------- */
+html[data-palette="graphite"] {
+  --c-deep: #25282E;
+  --c-deep-2: #30343B;
+  --c-accent: #CE6F40;          /* first try #C8693A was 4.45:1 under its dark on-accent */
+  --c-accent-fill: #CE6F40;
+  --c-accent-text: #9C4A1F;
+  --c-accent-on-deep: #F0A57D;
+  --c-on-accent: #1B1D21;
+  --c-ground: #F3F2EF;
+  --c-surface: #FCFBF9;
+  --c-ink: #1B1D21;
+  --c-muted: #5F5E5A;
+  --c-on-deep: #ECEAE5;
+  --c-on-deep-muted: #C4C2BC;
+  --c-line: rgba(27, 29, 33, .13);
+  --c-line-on-deep: rgba(236, 234, 229, .18);
+}

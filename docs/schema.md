@@ -181,8 +181,8 @@ sale being silently lost.
 | id | uuid | pk |
 | business_id, branch_id, variant_id | uuid | fk |
 | quantity | integer | signed: `+` in, `−` out |
-| type | varchar | `purchase` \| `sale` \| `return` \| `adjustment` \| `transfer_in` \| `transfer_out` |
-| reference_type, reference_id | varchar, uuid | nullable — the invoice or return that caused it |
+| type | varchar | `purchase` \| `sale` \| `return` \| `cancellation` \| `adjustment` \| `transfer_out` \| `transfer_in` \| `transfer_cancel` |
+| reference_type, reference_id | varchar, uuid | nullable — the invoice or return that caused it; for the three `transfer_*` types, `stock_transfer` and the `stock_transfers.id` |
 | user_id, device_id | uuid | nullable |
 | note | varchar | nullable |
 | occurred_at | timestamp | device clock |
@@ -191,6 +191,55 @@ sale being silently lost.
 Index: `(business_id, branch_id, variant_id)`, and `(business_id, occurred_at)`
 for reports. On MySQL these composite indexes carry the reporting queries, so
 add them with the table rather than later.
+
+### `stock_transfers` and `stock_transfer_items`
+Stock moving between branches, with a receiving step. Sending writes the
+`transfer_out` at the source and the pieces are then **in transit**: in no
+branch's balance, only on the transfer. The target's `transfer_in` is written
+when that branch confirms, for what actually arrived. Cancelling while in
+transit writes a `transfer_cancel` at the source instead.
+
+| column | type | notes |
+|---|---|---|
+| id | uuid | pk — also the `reference_id` of its movements |
+| business_id, from_branch_id, to_branch_id | uuid | fk; the branch keys RESTRICT, they never cascade |
+| status | varchar | `in_transit` \| `received` \| `cancelled` |
+| sent_by, sent_at | uuid, timestamp | |
+| received_by, received_at | uuid, timestamp | nullable |
+| cancelled_by, cancelled_at | uuid, timestamp | nullable |
+| has_shortage | boolean | set at receipt when any line arrived short |
+| note | varchar | nullable |
+
+Items: `transfer_id`, `variant_id`, `quantity_sent`, `quantity_received`
+(null until confirmed; `0` is a real answer), `quantity_settled` (running total
+of the settlements below). A shortage is
+`quantity_sent − quantity_received` on that line: it is neither added to a
+balance nor written off, and stays attached to one transfer between two named
+branches on a known date. Receiving more than was sent is refused.
+
+Per variant, **source + target + in transit + open shortage is constant** at
+every step. In transit is the sum of `quantity_sent` over `in_transit`
+transfers; the open shortage is, over `received` ones,
+`quantity_sent − quantity_received − quantity_settled`.
+
+### `stock_transfer_settlements`
+A shortage that turns up later is **moved** into a branch, not erased. One row
+per settlement: `transfer_id`, `variant_id`, `branch_id` (the transfer's target,
+"it arrived late", or its source, "it never left"), `quantity`, `reason`
+(required), `settled_by`, `settled_at`. It writes an ordinary
+`transfer_settlement` stock movement (same `reference_id` as the transfer, the
+reason as its note) and raises `quantity_settled` on the line. Partial is
+allowed; more than the open shortage is refused; there is no time limit.
+Allowed to the owner, or the manager of the branch the pieces enter.
+`has_shortage` goes back to false when no line has an open shortage left.
+
+**Late transfers.** An `in_transit` transfer older than
+`settings.transfers.late_after_days` (default 2, 1–90, set in Settings) is
+marked late on the transfers screen and counted for the owner. It is computed on
+read: no job and no email.
+
+**On the balances screen**, "in transit" is a separate column per branch (what is
+on its way *to* it). It is never added to the balance.
 
 > When summing the ledger gets slow, add a `stock_balances` table
 > `(business_id, branch_id, variant_id, quantity)` kept up to date by the same
@@ -229,7 +278,9 @@ receipt.
 | business_id, invoice_id | uuid | fk |
 | variant_id | uuid | nullable — null if the variant was deleted |
 | product_name, variant_label, sku | varchar | snapshot at sale time |
-| unit_price, line_total | decimal(12,2) | snapshot |
+| unit_price, line_total | decimal(12,2) | snapshot. `line_total` is **after** the line discount: it is what the customer paid |
+| discount_amount | decimal(12,2) | line discount as money, default 0 (never a percentage). Taken first; the invoice's `discount_amount` is then taken off the sum of the net lines. A return refunds a share of what was paid (`line_total − invoice_discount_share`), never `unit_price` (`sale_return_items.amount`) |
+| invoice_discount_share | decimal(12,2) | this line's share of the invoice discount, **worked out at sale time** (`Money::allocate`, cumulative, so the shares add up to the discount exactly) and never recomputed. Default 0 |
 | quantity | integer | |
 | returned_quantity | integer | default 0 — how much of this line came back |
 | timestamps | | |

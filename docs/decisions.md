@@ -157,9 +157,220 @@ Two things follow from the choice and are not optional:
 MySQL 8, not 5.7: 5.7 is end of life, and its `json` support and default
 collations are both weaker.
 
-## 12. The Laravel app lives in `core/`
+## 12. User email is globally unique
+
+One account belongs to one business, so login is stock Laravel auth with no
+business picker. Scoping email per business would mean two users could share an
+address and the login form would have to ask which shop first.
+
+Sellers therefore need an email each, created by the owner. A short PIN for
+fast seller switching on a shared till is a better fit for that and is on the
+phase-two list, not a reason to complicate login now.
+
+---
+
+## 13. `sale_returns`, not `returns`
+
+`returns` is a MySQL reserved word and `Return` is not a legal PHP class name,
+so the tables are `sale_returns` and `sale_return_items` and the models are
+`SaleReturn` and `SaleReturnItem`.
+
+---
+
+## 14. Everything a shop touches is a JSON API; only the platform panel is not
+
+**Decision:** the till *and* the business dashboard are Vue SPAs over the JSON
+API. The platform admin panel — where we manage subscribers — is server-driven
+(Inertia or Filament) and has no API.
+
+The till has no choice: it sells offline, so it needs an API and a local store.
+The dashboard could have been server-driven, which would have been noticeably
+less code per screen — no resource, no fetch, no loading or error state, and
+Laravel's own validation errors arriving in props.
+
+It is an API anyway because of where the customers are. A shop with unreliable
+internet does not only need to keep selling; it needs to receive stock, run a
+stock take and look at yesterday's takings. Deciding per screen now means
+rewriting whichever screens turn out to need it, and the ones most likely to —
+stock entry and stock takes — are not obvious enough to guess correctly.
+
+So the rule is: anything a shop uses is an API, and the question "could this
+screen need to work locally?" never has to be asked again. Two things follow
+for free: the desktop app can do everything offline rather than only selling,
+and an integration a customer asks for later is already possible.
+
+The platform panel is the one place the question has a certain answer. It is
+used by us, on our connection, to manage businesses and subscriptions — pure
+CRUD that will never run in a shop. It gets the fastest thing to build.
+
+What this costs, and is accepted: a one-off setup of client-side routing, auth
+state and an API client, then roughly two to three times the code per dashboard
+screen compared with the server-driven version.
+
+---
+
+## 15. The Laravel app lives in `core/`
 
 The repository root holds infrastructure (`.docker/`, `scripts/`,
 `docker-compose.yml`, `docs/`) and the application sits in `core/`. Same layout
 as the courses project. It keeps the Docker data directory and the build config
 out of the container's application mount.
+
+---
+
+## 16. An ended subscription does not stop selling
+
+**Decision:** `subscriptions.ends_at` and `Subscription::state()` inform and
+never enforce. Nothing in the sale, return or stock path reads them. The owner
+sees a banner, the platform panel can filter on it, and that is all.
+
+A till cannot be locked in the middle of a trading day because a bank transfer
+was a day late. The cost of a lost sale is paid by the shop on the spot, in
+front of a customer; the cost of one more day of unpaid use is ours, and small.
+Stopping a shop is a human decision made from the platform panel (decision 17),
+after someone has actually spoken to the customer.
+
+**Rejected:** stopping automatically at `ends_at`, or after a grace period.
+Both turn a late payment, a clock error or a bug in our own date handling into
+an outage for a business that is selling right now. The offline mode makes it
+worse: a device would have to decide on its own, without the server, whether
+the subscription still counts.
+
+What this costs, and is accepted: a shop that stops paying keeps working until
+someone on our side notices and suspends it. That is why the panel has to make
+the difficult cases visible: an expired subscription shows a badge and has a
+filter, and so does a shop with **no** subscription row at all. A missing row
+is the worst case, because there is no expiry date to show and no owner banner,
+so nothing in the system would ever mention it.
+
+---
+
+## 17. "Suspended" means read only
+
+**Decision:** a suspended business (`BusinessStatus::Suspended`) can sign in
+and read all of its own data, and cannot change anything.
+`EnsureBusinessIsWritable` refuses every request except GET, HEAD and sign-out
+with `business_suspended`; `CreateInvoice` and `CreateSaleReturn` check again,
+for callers that never come through HTTP. The front end reads the state from
+`/api/me` at start-up and also from any response that carries that code, so a
+till left open when the admin suspends the shop moves to the suspended screen
+on its next call rather than on its next page load.
+
+The data is the shop's, not ours. A locked-out customer cannot export their
+invoices, check their stock or see what they owe, which turns a billing
+conversation into a hostage situation and makes it harder to win them back.
+A shop that can still look at everything has a reason to sort out the payment.
+
+**Rejected:** blocking login entirely. It is simpler to enforce, but it removes
+the customer's access to their own records and gives them nothing to look at
+while we talk to them.
+
+**Also rejected, after being raised: carving out returns.** The argument for
+it is real — a customer standing at the counter with a receipt is a third party
+to a billing dispute between us and the shop, and a return only moves money out
+of the till and stock back onto the shelf, so it earns the shop nothing. It was
+still turned down, on 2026-11-16: read only has to mean read only, or the rule
+becomes a list of exceptions that nobody can hold in their head, and every new
+write endpoint needs a judgement call about which side of the line it falls on.
+A shop in that position settles up or takes the return as cash out of the
+drawer and records it when the account is live again.
+
+What this costs, and is accepted: the whole write surface has to be covered,
+not only selling. It is done in middleware rather than per controller so a new
+endpoint is covered without anyone remembering. The front end hides write
+actions on top of that, but only as a courtesy: the server is the enforcement.
+
+---
+
+## 18. A transfer is in transit until the receiving branch confirms it
+
+**Decision:** sending takes the pieces out of the source at once and puts them
+in no branch. They enter the target only when that branch's manager (or the
+owner) confirms what arrived. `stock_transfers` records the status, who sent
+and when, who received and when, and the lines.
+
+Under the first version the target was credited the moment the source was
+debited, and nobody confirmed anything. Pieces lost on the way were still on
+the target's shelf in the system; the count a month later showed a shortage
+and nobody could say where it came from. In transit is also simply true: the
+pieces left the shelf and are not on another one.
+
+- **Receiving less than was sent is allowed**, and is what the confirmation is
+  for. The target gets what arrived; the difference stays on the line
+  (`quantity_received < quantity_sent`) and the transfer is flagged, so the
+  owner sees a shortage on a named transfer between two branches on a date.
+  It is not added to a balance and not written off. Receiving **more** is
+  refused.
+- **The sending branch cannot confirm its own shipment**: that would make the
+  confirmation meaningless. Confirming is the target's manager or the owner.
+- **The source can take it back while it is in transit** (`transfer_cancel`
+  movement at the source). After confirmation it cannot: that is a new
+  transfer the other way.
+- The invariant per variant is **source + target + in transit + open shortage =
+  constant**. It was "source + target = constant"; this is that rule spelled
+  out for the time in between, not a break from it.
+- **A shortage is settled, not erased.** If the missing pieces turn up, a
+  settlement moves them into the branch they are really in (the target, or the
+  source if they never left), with a required reason, who and when, as a normal
+  stock movement. Partial is allowed, more than the shortage is not. The
+  shortage on the line stays as it was; what falls is the *open* part. Erasing
+  it instead would bring back the original problem: a difference that
+  disappears and nobody knows where it went. No time limit on settling: the
+  reason and the row are the control. (Open question: should a very old one
+  need the owner? Today a branch manager can settle into their own branch.)
+- **Late is a mark, not a process.** In transit past
+  `settings.transfers.late_after_days` (default 2, the owner's setting) is
+  flagged on the screen. Nothing is sent and nothing runs on a schedule.
+- **In transit is its own column on the balances**, per target branch, never
+  added to the balance: otherwise a branch would show stock it does not hold.
+- A transfer's id is the `reference_id` of its movements. Transfers made before
+  this were converted to `received` by the migration, with no movement touched.
+
+**Cost, accepted:** a transfer is now two steps and the target has to act, so
+stock the target has not confirmed cannot be sold from there. That is the
+point, but it means a slow manager holds stock off the shelf. The screens put
+what is waiting first, and show a count on the Transfers tab.
+
+## 19. One token file, three front ends; a shop's brand is applied at runtime
+
+`/till`, `/dashboard` (Vite) and `/admin` (Blade, buildless, decision 14) share
+`core/public/css/tokens.css`, a plain static file linked from all three views.
+It cannot live in a Vite bundle because `/admin` has none. It holds tokens
+only (colour, type, space, shape, motion), no component rules, and
+`resources/css/app.css` defines none: two definitions of a colour is the
+failure this project keeps hitting. The old names (`--accent`, `--bg`, `--bad`…)
+are kept as aliases so ~100 Vue files were not renamed.
+
+- **The file is not hashed.** Bump `scanzo.assets_version` (config) by hand when
+  it, `brand-boot.js` or `admin-shell.js` change, or a browser keeps the old colours.
+- **Palettes** are `html[data-palette="…"]` blocks. Only the platform panel has
+  a picker (Karim's own); a shop gets a brand instead.
+- **State colours** (`--c-danger`, `--c-warn`, `--c-success` and their
+  backgrounds) are declared once on `:root` and never overridden by a palette or
+  a brand, so a red brand still cannot make an error look like a button.
+  `DesignTokensTest` fails the build if one is.
+- **Brand** = `settings.brand.{primary,secondary,logo}`. Primary is the accent
+  (buttons, active item, links, focus ring); secondary is the sidebar and top
+  bar. Text colour on either is **derived** by `App\Support\Brand\Contrast`
+  (WCAG 2.1, 4.5:1; white or ink, and if neither reaches it the fill is darkened
+  or lightened in small steps) at render, **never stored**. The colour the owner
+  picked stays for borders, tints and the logo frame.
+- **Why runtime, not in the HTML:** `/till` and `/dashboard` are served without
+  auth on purpose, so the server does not know the shop when it renders.
+  `/api/me` returns `business.brand`; sign-in caches it in localStorage under a
+  key with the business id; `public/js/brand-boot.js` (a classic script in
+  `<head>`) puts it on `:root` before first paint; the app reconciles when
+  `/api/me` answers. Sign-out drops the cache. The very first load on a device
+  still paints the platform colours once.
+- **One logo.** `settings.receipt.logo` was merged into `settings.brand.logo`
+  (sidebar, till header, receipt); a migration moved existing values. Uploads go
+  to `storage/app/public/brands/{business_id}/` on the `public` disk; SVGs with
+  script, event handlers, `javascript:` or `foreignObject` are refused.
+- **Motion is CSS only.** No GSAP, ScrollTrigger or Lenis. The till moves only
+  functionally and never above 200ms; the dashboard and admin may do more.
+  All of it is off under `prefers-reduced-motion`.
+
+**Known follow-up (offline):** fonts come from the Google Fonts `<link>`. An
+offline till cannot reach Google, so when the offline work starts the IBM Plex
+Sans Arabic (and Reem Kufi for the dashboard) files move to self-hosted woff2
+in `public/fonts/` with `@font-face`.

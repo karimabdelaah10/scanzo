@@ -36,7 +36,7 @@ customer will do without.
 - **Import from Excel**: nobody types in a catalogue of hundreds of pieces by hand
 - **Reports**: daily sales, best sellers, low stock, per seller, per branch
 - **Stock take**: scan the shelf, see the differences, post the adjustment
-- **Transfers between branches**
+- **Transfers between branches**, with the receiving branch confirming (decision 18)
 
 ### Done when
 
@@ -52,6 +52,26 @@ sell — without us doing anything by hand.
 - Promotions and price rules
 - Egyptian e-invoicing, if the customers need it
 - Public API and integrations
+
+---
+
+## Front end
+
+One repository, one deploy. The Laravel app serves everything and Vite builds
+three entry points under `core/resources/js/`:
+
+| Entry | Who uses it | How |
+|---|---|---|
+| `till/` | sellers | SPA over the JSON API, works offline |
+| `dashboard/` | owners and branch managers | SPA over the JSON API |
+| `admin/` | us | server-driven, no API |
+
+Why the dashboard is an API too, and not server-driven:
+[decision 14](decisions.md#14-everything-a-shop-touches-is-a-json-api-only-the-platform-panel-is-not).
+
+The Electron or Tauri wrapper for the desktop app lives in `desktop/` beside
+`core/`, since it builds an executable rather than web assets. It loads the
+same built `till/` assets.
 
 ---
 

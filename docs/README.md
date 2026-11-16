@@ -20,6 +20,7 @@ part of the day-to-day flow.
 
 ## Contents
 
+- [onboarding.md](onboarding.md) — what taking on a customer actually involves
 - [schema.md](schema.md) — tables, columns and relationships
 - [decisions.md](decisions.md) — the architectural decisions and why they were made
 - [roadmap.md](roadmap.md) — what ships in which phase

@@ -46,6 +46,22 @@ storage and runs the migrations. Edit `core/.env` afterwards if you need to.
 
 The app is then on <http://127.0.0.1:49100> (or whatever `MAIN_NGINX_PORT` you set).
 
+## When Laravel says "Permission denied"
+
+`core/` is bind-mounted into the containers, so the image's own ownership is
+replaced by whatever the host files carry, and a file written by an editor or a
+sync tool can land unreadable by php-fpm. From the host:
+
+```bash
+./scripts/fix_host_permissions.sh
+```
+
+Then, if the config was cached before the fix:
+
+```bash
+docker exec -it scanzo-app php artisan optimize:clear
+```
+
 ## Ports
 
 | Service        | Host port |

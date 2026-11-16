@@ -1,0 +1,236 @@
+/* The business dashboard. Builds on the tokens and classes in app.css; only
+   what a wide, scrolling, desk-sized page needs lives here, and nothing in
+   this file changes how the till looks. */
+
+html, body, #app { height: auto; min-height: 100%; }
+
+.dash { max-width: 1080px; margin: 0 auto; padding: 0 16px 48px; }
+
+/* The shell. Narrow screens get a slim top bar and a drawer; from 900px up the
+   same column is fixed beside the content. 900 is where a horizontal bar stops
+   fitting the brand, a branch picker and the sign-out button next to the
+   sections, with room to spare for the sections still to come. */
+.dash.framed { max-width: none; padding: 0; }
+
+/* The top bar and the side column are the shop's secondary colour
+   (--side-bg, with --side-fg derived for contrast), the platform's deep colour
+   when the shop picked none. The active item and the buttons are the primary. */
+.shell-top {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--side-bg); color: var(--side-fg);
+  display: flex; align-items: center; gap: 10px;
+  padding: max(8px, env(safe-area-inset-top, 0px)) max(var(--gutter), env(safe-area-inset-right, 0px)) 8px max(var(--gutter), env(safe-area-inset-left, 0px));
+  box-shadow: inset 0 -1px 0 var(--side-line);
+}
+.shell-top .brand {
+  flex: 1; margin: 0; font-family: var(--f-display); font-size: var(--fs-md); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: flex; align-items: center; gap: 10px;
+}
+.shell-top .icon-btn.ghost { background: transparent; border: 0; box-shadow: inset 0 0 0 1px var(--side-line); color: var(--side-fg); }
+.shell-top :focus-visible { outline-color: var(--side-fg); }
+.shell-top .btn, .shell-foot .btn { min-height: 44px; }
+
+.shell-scrim { position: fixed; inset: 0; z-index: 20; background: rgba(15, 23, 36, 0.5); animation: fade-in var(--dur-base) ease-out; }
+
+/* The drawer grows from the inline-start edge. Its edge is an inset ring, so it
+   never adds width; the big soft shadow shows only while it floats over the
+   page. height is svh: `vh` is the tall viewport on a phone, taller than the
+   screen while the URL bar is showing, and pushed the sign-out button off it. */
+.shell-side {
+  position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 30;
+  width: min(300px, 86vw); height: 100svh;
+  background: var(--side-bg); color: var(--side-fg);
+  box-shadow: inset -1px 0 0 var(--side-line), var(--shadow-raised);
+  display: flex; flex-direction: column; gap: 14px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding-inline-start: calc(16px + env(safe-area-inset-right, 0px));
+  overflow-y: auto; overscroll-behavior: contain;
+  transform: translateX(100%); visibility: hidden;
+  transition: transform var(--dur-slow) var(--ease-sheet), visibility 0s linear var(--dur-slow);
+}
+html[dir="ltr"] .shell-side { transform: translateX(-100%); padding-inline-start: calc(16px + env(safe-area-inset-left, 0px)); }
+.shell-side.open { transform: none; visibility: visible; transition: transform var(--dur-slow) var(--ease-sheet); }
+/* The page behind an open drawer does not scroll. */
+html.drawer-open { overflow: hidden; }
+
+.shell-side .brand {
+  display: none; margin: 0; font-family: var(--f-display); font-size: var(--fs-lg); font-weight: 600;
+  align-items: center; gap: 10px; min-height: 44px;
+}
+.brand-logo {
+  height: 32px; width: auto; max-width: 96px; object-fit: contain; flex: none;
+  /* The frame keeps the colour the owner picked, adjusted or not. */
+  background: #fff; border-radius: var(--radius-sm); padding: 3px;
+  box-shadow: 0 0 0 2px var(--brand-primary, transparent);
+}
+.shell-side > .btn.primary { display: none; }
+.shell-side nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.shell-side nav a {
+  display: flex; align-items: center; min-height: 44px; padding: 0 14px;
+  border-radius: var(--radius-sm); color: var(--side-fg-muted);
+  text-decoration: none; font-weight: 600;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-base) ease;
+}
+.shell-side nav a:hover { background: var(--side-hover); color: var(--side-fg); }
+/* Selected is a ring on the soft pair, not the full accent, and not a fill that
+   shifts anything: the ring is inset. */
+.shell-side nav a.on { background: var(--accent-soft); color: var(--accent-soft-fg); box-shadow: inset 0 0 0 2px var(--c-accent-text); }
+.shell-side :focus-visible { outline-color: var(--side-fg); }
+.shell-side .nav-title { color: var(--side-fg-muted); }
+.shell-side .btn.quiet { color: var(--side-fg-muted); }
+.shell-side .btn.quiet:hover { color: var(--side-fg); }
+.shell-side .chip { background: var(--side-hover); color: var(--side-fg); }
+.shell-foot { display: flex; flex-direction: column; gap: 10px; align-items: stretch; border-top: 1px solid var(--side-line); padding-top: 12px; }
+.shell-foot select.input { width: 100%; min-height: 44px; }
+.shell-foot .chip { align-self: flex-start; }
+
+.shell-main { padding: 16px 16px 48px; min-width: 0; }
+
+@media (min-width: 900px) {
+  .shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); align-items: start; }
+  .shell-top, .shell-scrim { display: none; }
+
+  .shell-side {
+    position: sticky; top: 0; z-index: 1; width: auto;
+    transform: none; visibility: visible; transition: none;
+    box-shadow: inset -1px 0 0 var(--side-line);
+  }
+  html[dir="ltr"] .shell-side { box-shadow: inset 1px 0 0 var(--side-line); }
+  html.drawer-open { overflow: visible; }
+  .shell-side .brand { display: block; }
+  .shell-side > .btn.primary { display: flex; }
+
+  .shell-main { max-width: 1080px; width: 100%; padding: 24px 32px 48px; }
+}
+
+.dash h2 { font-size: 20px; margin: 0; }
+.dash .page-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.dash .page-head h2 { flex: 1; }
+
+.dash .list { flex: none; overflow: visible; }
+.dash .stack { display: flex; flex-direction: column; gap: 12px; }
+.dash .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.dash .toolbar .input { width: auto; min-width: 140px; }
+.dash .toolbar .search { flex: 1; min-width: 200px; }
+
+a.btn { text-decoration: none; color: inherit; }
+a.btn.primary { color: var(--accent-fg); }
+.btn.sm { min-height: 38px; padding: 0 12px; font-size: 14px; border-radius: 10px; }
+.btn.on { background: var(--accent-soft); color: var(--accent-soft-fg); border-color: var(--c-accent-text); }
+
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--bg); color: var(--muted); }
+.badge.bad { background: var(--bad-soft); color: var(--bad); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.ok { background: var(--accent-soft); color: var(--accent-soft-fg); }
+
+/* tables */
+.tbl-wrap { overflow-x: auto; }
+table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tbl th { text-align: start; font-weight: 600; color: var(--muted); font-size: 12px; padding: 6px 8px; white-space: nowrap; }
+.tbl td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: middle; }
+.tbl tr.off td { color: var(--muted); }
+.tbl .num { font-variant-numeric: tabular-nums; }
+.tbl .input.cell { min-height: 38px; width: 96px; padding: 0 8px; border-radius: 10px; direction: ltr; text-align: left; }
+.tbl .input.cell.edited { border-color: var(--c-accent-text); background: var(--accent-soft); }
+.tbl .input.cell.invalid { border-color: var(--bad); }
+
+/* On a phone a `.stacks` table becomes a column of cards. The pattern, its
+   markup contract and the reasoning live in public/css/tables.css, which the
+   platform panel shares. */
+
+.field-error { color: var(--bad); }
+.form-card { box-shadow: var(--ring-selected); }
+.switch-row { display: flex; align-items: center; gap: 10px; }
+.switch-row input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+.nav-title { margin: 14px 14px 2px; font-size: 12px; font-weight: 700; color: var(--muted); }
+
+.qty-bad { color: var(--bad); font-weight: 700; }
+.qty-low { color: var(--warn); font-weight: 700; }
+
+/* chip input */
+.chips {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  min-height: 48px; padding: 6px 10px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--surface); cursor: text;
+}
+.chips:focus-within { outline: 3px solid var(--c-accent-text); outline-offset: 2px; }
+.chips .pill {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px 4px 12px;
+  border-radius: 999px; background: var(--accent-soft); color: var(--accent-soft-fg); font-weight: 600;
+}
+.chips .pill button { width: 24px; height: 24px; border-radius: 50%; color: inherit; font-size: 16px; line-height: 1; }
+.chips input { flex: 1; min-width: 120px; border: none; outline: none; background: transparent; min-height: 34px; }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 640px) { .two, .three { grid-template-columns: 1fr; } }
+
+.diff { display: inline-block; min-width: 54px; text-align: center; padding: 3px 10px; border-radius: 10px; font-weight: 700; font-variant-numeric: tabular-nums; direction: ltr; }
+.diff.plus { background: var(--accent-soft); color: var(--accent-soft-fg); }
+.diff.minus { background: var(--bad-soft); color: var(--bad); }
+.diff.zero { background: var(--bg); color: var(--muted); }
+
+.choice { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.choice.on { border-color: var(--c-accent-text); background: var(--accent-soft); }
+.choice input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.sticky-foot {
+  position: sticky; bottom: 0; background: var(--bg); padding: 10px 0;
+  border-top: 1px solid var(--line); display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+}
+
+.subtabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+
+/* A fieldset used only to disable the controls inside it. */
+.bare { border: 0; padding: 0; margin: 0; min-width: 0; }
+
+/* Always the first thing on a screen, and never dismissible. */
+.status-banner { margin-bottom: 16px; font-weight: 600; }
+
+/* ---------------------------------------------------------------------------
+   Desk-sized polish. The dashboard is used at a desk, occasionally, so it may
+   move a little more than the till: headings in the display face, a card that
+   lifts under the pointer, lists that settle in row by row. CSS only, and
+   switched off under prefers-reduced-motion.
+   --------------------------------------------------------------------------- */
+.dash h2, .dash .page-head h2 { font-family: var(--f-display); font-weight: 600; font-size: var(--fs-xl); }
+
+/* Only a card you can act on rises (a link, a button, or marked .lift). A form
+   card that lifted under the pointer would be a form moving while you type in
+   it; a resting card has no shadow at all. */
+@media (hover: hover) {
+  .dash a.card, .dash button.card, .dash .card.lift {
+    transition: transform var(--dur-lift) var(--ease-out), box-shadow var(--dur-lift) var(--ease-out);
+  }
+  .dash a.card:hover, .dash button.card:hover, .dash .card.lift:hover {
+    transform: translateY(-8px); box-shadow: var(--ring-hover), var(--shadow-lift);
+  }
+}
+
+.dash .list > *, .dash .stack > .card { animation: rise var(--dur-slow) var(--ease-out) both; }
+.dash .list > :nth-child(2), .dash .stack > .card:nth-child(2) { animation-delay: 40ms; }
+.dash .list > :nth-child(3), .dash .stack > .card:nth-child(3) { animation-delay: 80ms; }
+.dash .list > :nth-child(4), .dash .stack > .card:nth-child(4) { animation-delay: 120ms; }
+.dash .list > :nth-child(n+5), .dash .stack > .card:nth-child(n+5) { animation-delay: 160ms; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dash *, .shell-side, .shell-scrim { animation: none !important; transition: none !important; }
+  .dash a.card:hover, .dash button.card:hover, .dash .card.lift:hover { transform: none; }
+}
+
+/* The brand preview in Settings: a button and a nav item as they will look. */
+.brand-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; }
+.brand-preview .pv-side { background: var(--pv-side, var(--side-bg)); color: var(--pv-side-fg, var(--side-fg)); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.brand-preview .pv-nav { padding: 10px 12px; border-radius: 10px; font-weight: 600; background: var(--pv-accent, var(--accent)); color: var(--pv-accent-fg, var(--accent-fg)); }
+.brand-preview .pv-nav.plain { background: transparent; opacity: .8; color: inherit; }
+.brand-preview .pv-btn { align-self: center; justify-self: center; min-height: 48px; padding: 0 22px; border-radius: var(--radius); font-weight: 700; background: var(--pv-accent, var(--accent)); color: var(--pv-accent-fg, var(--accent-fg)); display: inline-flex; align-items: center; }
+.brand-preview .pv-main { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; padding: 12px; }
+@media (max-width: 640px) { .brand-preview { grid-template-columns: 1fr; } }
+.colour-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.colour-row input[type="color"] { width: 52px; height: 44px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.logo-box { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.logo-box img { max-height: 56px; max-width: 140px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.btn:has(.sr-only:focus-visible) { outline: 3px solid var(--accent-text); outline-offset: 2px; }

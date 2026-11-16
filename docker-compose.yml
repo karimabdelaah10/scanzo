@@ -9,6 +9,11 @@ services:
       - ./.docker/php/php.ini:/usr/local/etc/php/conf.d/php-overrides.ini
     working_dir: /var/www
     container_name: ${APP_CONTAINER_NAME}
+    ports:
+      # The Vite dev server. Without this, `npm run dev` listens inside the
+      # container only and the browser cannot reach it, so @vite writes script
+      # tags pointing at a dead server and every page renders blank.
+      - "${VITE_PORT:-5173}:5173"
     depends_on:
       - mysql
       - redis
